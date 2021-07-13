@@ -1,0 +1,93 @@
+---
+title: "Classification and Regression Analysis using British Seatbelt Data"
+output: html_notebook
+---
+
+## Where to find datasets?: The "datasets" library
+```{r}
+library(datasets)
+
+seatbelts <- datasets::Seatbelts
+
+df <- as.data.frame(seatbelts)
+# df$Date <- rownames(seatbelts)
+
+print(head(df))
+```
+
+
+
+# Load time series modeling library (XTS and Zoo) and using them to decode the data column in the "datasets::Seatbelts" dataset
+```{r}
+library(zoo)
+library(xts)
+# df$Date <- as.yearmon(time(seatbelts))
+df$Date <- as.Date(time(seatbelts))
+
+df$law <- as.factor(df$law)
+sapply(df,class)
+```
+
+## Exploratory analysis of the difference between classes of law = 1 and law = 0 w.r.t. DriversKilled and VanKilled
+```{r}
+boxplot(DriversKilled ~ law, data = df)
+t.test(DriversKilled ~ law, data = df) #Establish the statistical significance of the difference of means between law = 1 and law = 0 w.r.t. DriversKilled
+
+boxplot(VanKilled ~ law, data = df)
+t.test(VanKilled ~ law, data = df) #Establish the statistical significance of the difference of means between law = 1 and law = 0 w.r.t. VanKilled
+```
+
+##  Logistic Regression. Use "binomial" to set it as categorical data
+```{r}
+model <- glm (formula = law ~ DriversKilled + VanKilled, family = "binomial", data = df)
+summary(model)
+
+exp(model$coefficients) # 
+```
+
+## Create predictions of the fit logistic model against our original data - each row being an independent evalutation of the model
+```{r}
+predictionsOfLawInEffect <- predict(model, newdata = df)
+# Categorize the predicted 
+predictionsOfLawInEffect_CATEGORICAL <- predictionsOfLawInEffect > -2
+```
+
+
+```{r}
+
+print(table(df$law, predictionsOfLawInEffect_CATEGORICAL)) #Confusion matrix
+```
+
+## Visualize a probability density plot of the predicted odds of the response of law = 1 in the predicted set of evaluated records 
+
+# ODDS = p / (1 - p); where ODDS = exp(predictionsOfLawInEffect)
+# => (1 - p)*ODDS = p
+# => p = ODDS/(1+ODDS)
+```{r}
+plot(density(exp(predictionsOfLawInEffect))) 
+plot(density(exp(predictionsOfLawInEffect)/(1+exp(predictionsOfLawInEffect))))  # plot of the "ODDS" of each row being classified for the law being in effect
+print(summary(exp(predictionsOfLawInEffect)/(1+exp(predictionsOfLawInEffect))))
+```
+
+
+## Boxplot to find the optimal probability cutoff for dichotimization of the law = 1 status
+```{r}
+boxplot(exp(predictionsOfLawInEffect)/(1+exp(predictionsOfLawInEffect)) ~ df$law)
+```
+
+## Perform Linear Regression as an example use-case to predicted drivers that died as a function of the law status being in effect
+```{r}
+# Linear Regression for REGRESSION of the number of people that died ON the Xs
+#  /regressors law-being-in-effect and total number of drivers
+# Y = number of people that died
+# X = [law, drivers, PetrolPrice]
+
+model2 <- lm (DriversKilled ~ law, data = df)
+summary (model2)
+
+```
+
+## Export df to a file:
+```{r}
+write.csv(df, row.names = F, file = "britishSeatBeltStudy.csv")
+```
